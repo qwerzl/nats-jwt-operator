@@ -1,5 +1,10 @@
 # Kubernetes Operator for NATS JWT
 
+Reconciliation is idempotent: unchanged account and user claims do not rewrite
+their generated Secrets. Signing-key rotation reissues the JWT while retaining
+the generated account/user seed. Signer seed material is never included in
+controller error messages.
+
 This operator aims to ease up the decentralized configuration pattern as described in [NATS Docs](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/jwt).
 To do so, it creates three new CRDs, one for Operator, Account and User objects.
 
@@ -404,4 +409,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-

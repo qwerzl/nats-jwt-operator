@@ -186,15 +186,28 @@ func (r *NatsUserReconciler) reconcileKey(ctx context.Context, secret *corev1.Se
 	needsClaimsUpdate := secret.Data == nil
 	signerKp, err := nkeys.FromSeed(signer)
 	if err != nil {
-		return false, fmt.Errorf("failed decoding seed: %v, signer: %v", err, signer)
+		return false, fmt.Errorf("failed decoding signer seed: %w", err)
+	}
+	signerPublic, err := signerKp.PublicKey()
+	if err != nil {
+		return false, fmt.Errorf("failed reading signer public key: %w", err)
+	}
+	encodedToken, err := token.Encode(signerKp)
+	if err != nil {
+		logger.Info("token encode error", "pubkey", token.Subject, "public", public)
+		return false, err
+	}
+	canonicalToken, err := jwt.DecodeUserClaims(encodedToken)
+	if err != nil {
+		return false, fmt.Errorf("failed decoding freshly encoded user claims: %w", err)
 	}
 
 	if secret.Data != nil {
 		oldToken, err := jwt.DecodeUserClaims(string(secret.Data[OPERATOR_JWT]))
 		if err == nil {
-			needsClaimsUpdate = needsClaimsUpdate || !reflect.DeepEqual(token.User, oldToken.User)
+			needsClaimsUpdate = needsClaimsUpdate || !reflect.DeepEqual(canonicalToken.User, oldToken.User)
 			// Check if the signing keys changed
-			needsClaimsUpdate = needsClaimsUpdate || oldToken.Issuer != token.Issuer
+			needsClaimsUpdate = needsClaimsUpdate || oldToken.Issuer != signerPublic
 		} else {
 			// Claims could not be decoded, need update.
 			needsClaimsUpdate = true
@@ -211,13 +224,8 @@ func (r *NatsUserReconciler) reconcileKey(ctx context.Context, secret *corev1.Se
 		secret.Data[OPERATOR_PUBLIC_KEY] = []byte(public)
 	}
 	if needsKeyUpdate || needsClaimsUpdate {
-		jwt, err := token.Encode(signerKp)
-		if err != nil {
-			logger.Info("token encode error", "pubkey", token.Subject, "public", public)
-			return false, err
-		}
-		secret.Data[OPERATOR_JWT] = []byte(jwt)
-		secret.Data[OPERATOR_CREDS] = []byte(fmt.Sprintf(ACCOUNT_TEMPLATE, jwt, seed))
+		secret.Data[OPERATOR_JWT] = []byte(encodedToken)
+		secret.Data[OPERATOR_CREDS] = []byte(fmt.Sprintf(ACCOUNT_TEMPLATE, encodedToken, seed))
 	}
 	return needsKeyUpdate || needsClaimsUpdate, nil
 }

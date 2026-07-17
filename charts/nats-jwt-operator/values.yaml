@@ -31,8 +31,12 @@ controllerManager:
         drop:
         - ALL
     image:
-      repository: ghcr.io/deinstapel/nats-jwt-operator/operator
-      tag: edge
+      repository: ghcr.io/photon-hq/nats-jwt-operator/operator
+      # The Photon deployment currently publishes branch images on every main
+      # push; pull on every rollout until the image workflow publishes release
+      # tags alongside chart releases.
+      tag: main
+      pullPolicy: Always
     resources:
       limits:
         cpu: 500m

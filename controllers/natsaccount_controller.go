@@ -173,15 +173,27 @@ func (r *NatsAccountReconciler) reconcileKey(ctx context.Context, secret *corev1
 	needsClaimsUpdate := secret.Data == nil
 	signerKp, err := nkeys.FromSeed(signer)
 	if err != nil {
-		return false, fmt.Errorf("failed decoding seed: %v, signer: %v", err, signer)
+		return false, fmt.Errorf("failed decoding signer seed: %w", err)
+	}
+	signerPublic, err := signerKp.PublicKey()
+	if err != nil {
+		return false, fmt.Errorf("failed reading signer public key: %w", err)
+	}
+	encodedToken, err := token.Encode(signerKp)
+	if err != nil {
+		return false, err
+	}
+	canonicalToken, err := jwt.DecodeAccountClaims(encodedToken)
+	if err != nil {
+		return false, fmt.Errorf("failed decoding freshly encoded account claims: %w", err)
 	}
 
 	if secret.Data != nil {
 		oldToken, err := jwt.DecodeAccountClaims(string(secret.Data[OPERATOR_JWT]))
 		if err == nil {
-			needsClaimsUpdate = needsClaimsUpdate || !reflect.DeepEqual(token.Account, oldToken.Account)
+			needsClaimsUpdate = needsClaimsUpdate || !reflect.DeepEqual(canonicalToken.Account, oldToken.Account)
 			// Check if the signing keys changed
-			needsClaimsUpdate = needsClaimsUpdate || oldToken.Issuer != token.Issuer
+			needsClaimsUpdate = needsClaimsUpdate || oldToken.Issuer != signerPublic
 		} else {
 			// Claims could not be decoded, need update.
 			needsClaimsUpdate = true
@@ -198,11 +210,7 @@ func (r *NatsAccountReconciler) reconcileKey(ctx context.Context, secret *corev1
 		secret.Data[OPERATOR_PUBLIC_KEY] = []byte(public)
 	}
 	if needsKeyUpdate || needsClaimsUpdate {
-		jwt, err := token.Encode(signerKp)
-		if err != nil {
-			return false, err
-		}
-		secret.Data[OPERATOR_JWT] = []byte(jwt)
+		secret.Data[OPERATOR_JWT] = []byte(encodedToken)
 	}
 	return needsKeyUpdate || needsClaimsUpdate, nil
 }

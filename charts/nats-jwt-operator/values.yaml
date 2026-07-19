@@ -27,6 +27,7 @@ controllerManager:
     - --leader-elect
     containerSecurityContext:
       allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
       capabilities:
         drop:
         - ALL

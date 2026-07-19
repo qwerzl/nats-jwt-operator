@@ -28,7 +28,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Validate the synthetic merge commit for pull requests so tests also
+          # catch incompatibilities with the current base branch.
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Set up Go
